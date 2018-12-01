@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -e
+
+gsettings-tool extract
+if [ -z "$(git status --porcelain)" ]; then
+	gsettings-tool apply
+fi

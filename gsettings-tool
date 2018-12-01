@@ -1,0 +1,48 @@
+#!/bin/bash
+
+for artifact in "$HOME/.config/gsettings.d/"*
+do
+	[ -e "$artifact" ] || continue
+	artifactbase="$(basename "$artifact")"
+	schema="${artifactbase%:*}"
+	key="${artifactbase##*:}"
+
+	GSETTINGS="gsettings"
+	if [[ "$schema" =~ ^org\.gnome\.shell\.extensions\.([^.]+) ]]
+	then
+		# we need to explicitly load the schema for settings from extensions
+		schemafile="$(find \
+			"$HOME/.local/share/gnome-shell/extensions/${BASH_REMATCH[1]}"* \
+			-name gschemas.compiled -type f | head -n1)"
+		[ -n "$schemafile" ] && \
+			GSETTINGS="gsettings --schemadir $(dirname "$schemafile")"
+	fi
+
+	case "$1" in
+		"apply")
+			cat "$artifact" | while read ischema ikey isetting
+			do
+				# only apply settings that have not changed
+				# this preserves default values and is a lot faster
+				current="$($GSETTINGS get "$ischema" "$ikey")"
+				[ "x$current" = "x$isetting" ] || \
+					$GSETTINGS set "$ischema" "$ikey" "$isetting"
+			done
+			;;
+		"extract")
+			if [ "$schema" = "$key" ]
+			then
+				# extract all keys from a schema
+				$GSETTINGS list-recursively "$schema" > "$artifact"
+			else
+				# extract single key
+				echo "$schema $key $($GSETTINGS get "$schema" "$key")" > \
+					"$artifact"
+			fi
+			;;
+		*)
+			echo "Call me like this: $0 <apply|extract>" >&2
+			exit 1
+			;;
+		esac
+done
